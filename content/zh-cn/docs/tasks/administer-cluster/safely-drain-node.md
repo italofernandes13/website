@@ -2,6 +2,7 @@
 title: 安全地清空一个节点
 content_type: task
 min-kubernetes-server-version: 1.5
+weight: 310
 ---
 <!--
 reviewers:
@@ -12,6 +13,7 @@ reviewers:
 title: Safely Drain a Node
 content_type: task
 min-kubernetes-server-version: 1.5
+weight: 310
 -->
 
 <!-- overview -->
@@ -116,8 +118,21 @@ Next, tell Kubernetes to drain the node:
 接下来，告诉 Kubernetes 清空节点：
 
 ```shell
-kubectl drain <node name>
+kubectl drain --ignore-daemonsets <node name>
 ```
+
+<!--
+If there are pods managed by a DaemonSet, you will need to specify
+`--ignore-daemonsets` with `kubectl` to successfully drain the node. The `kubectl drain` subcommand on its own does not actually drain
+a node of its DaemonSet pods:
+the DaemonSet controller (part of the control plane) immediately replaces missing Pods with
+new equivalent Pods. The DaemonSet controller also creates Pods that ignore unschedulable
+taints, which allows the new Pods to launch onto a node that you are draining.
+-->
+如果存在由 DaemonSet 管理的 Pod，你需要使用 `kubectl` 指定 `--ignore-daemonsets` 才能成功腾空节点。
+`kubectl drain` 子命令本身并不会实际腾空节点上的 DaemonSet Pod：
+DaemonSet 控制器（控制平面的一部分）立即创建新的等效 Pod 替换丢失的 Pod。
+DaemonSet 控制器还会创建忽略不可调度污点的 Pod，这允许新的 Pod 启动到你正在腾空的节点上。
 
 <!-- 
 Once it returns (without giving an error), you can power down the node
@@ -155,19 +170,21 @@ respect the `PodDisruptionBudget` you specify.
 For example, if you have a StatefulSet with three replicas and have
 set a PodDisruptionBudget for that set specifying `minAvailable: 2`,
 `kubectl drain` only evicts a pod from the StatefulSet if all three
-replicas pods are ready; if then you issue multiple drain commands in
-parallel, Kubernetes respects the PodDisruptionBudget and ensure
-that only 1 (calculated as `replicas - minAvailable`) Pod is unavailable
-at any given time. Any drains that would cause the number of ready
+replicas pods are [healthy](/docs/tasks/run-application/configure-pdb/#healthiness-of-a-pod);
+if then you issue multiple drain commands in parallel,
+Kubernetes respects the PodDisruptionBudget and ensure that
+only 1 (calculated as `replicas - minAvailable`) Pod is unavailable
+at any given time. Any drains that would cause the number of [healthy](/docs/tasks/run-application/configure-pdb/#healthiness-of-a-pod)
 replicas to fall below the specified budget are blocked.
 -->
 例如，如果你有一个三副本的 StatefulSet，
 并设置了一个 `PodDisruptionBudget`，指定 `minAvailable: 2`。
-如果所有的三个 Pod 均就绪，并且你并行地发出多个 drain 命令，
-那么 `kubectl drain` 只会从 StatefulSet 中逐出一个 Pod，
+如果所有的三个 Pod 处于[健康（healthy）](/zh-cn/docs/tasks/run-application/configure-pdb/#healthiness-of-a-pod)状态，
+并且你并行地发出多个 drain 命令，那么 `kubectl drain` 只会从 StatefulSet 中逐出一个 Pod，
 因为 Kubernetes 会遵守 PodDisruptionBudget 并确保在任何时候只有一个 Pod 不可用
 （最多不可用 Pod 个数的计算方法：`replicas - minAvailable`）。
-任何会导致就绪副本数量低于指定预算的清空操作都将被阻止。
+任何会导致处于[健康（healthy）](/zh-cn/docs/tasks/run-application/configure-pdb/#healthiness-of-a-pod)
+状态的副本数量低于指定预算的清空操作都将被阻止。
 
 <!-- 
 ## The Eviction API
